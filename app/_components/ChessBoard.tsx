@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type DragEvent } from 'react'
+import { useState } from 'react'
 import {
   parseFen, legalMoves, applyMove, colorOf,
   isCheck, isCheckmate, isStalemate, START_FEN,
@@ -32,7 +32,6 @@ const TARGET_GREEN     = 'rgba(20,  80, 50, 0.50)'   // legal-move dot / capture
 export default function ChessBoard() {
   const [state, setState] = useState<State>(() => parseFen(START_FEN))
   const [selected, setSelected] = useState<Square | null>(null)
-  const [dragging, setDragging] = useState<Square | null>(null)
   const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(null)
 
   const targets = selected ? legalMoves(state, selected) : []
@@ -57,44 +56,19 @@ export default function ChessBoard() {
     setSelected(piece && colorOf(piece) === state.turn ? [r, f] : null)
   }
 
-  // -- drag-and-drop ---------------------------------
-  function onDragStart(e: DragEvent, r: number, f: number) {
-    const piece = state.board[r][f]
-    if (!piece || colorOf(piece) !== state.turn) {
-      e.preventDefault()
-      return
-    }
-    e.dataTransfer.setData('text/plain', `${r},${f}`)
-    e.dataTransfer.effectAllowed = 'move'
-    setSelected([r, f])
-    setDragging([r, f])
-  }
-  // preventDefault is the "drop is allowed" signal — only on legal targets
-  function onDragOver(e: DragEvent, r: number, f: number) {
-    if (isTarget(r, f)) e.preventDefault()
-  }
-  function onDrop(e: DragEvent, r: number, f: number) {
-    e.preventDefault()
-    const data = e.dataTransfer.getData('text/plain')
-    if (!data) return
-    const [sr, sf] = data.split(',').map(Number)
-    commit([sr, sf], [r, f])
-    setDragging(null)
-  }
-  function onDragEnd() {
-    // fires on both successful drop and cancel — idempotent cleanup
-    setDragging(null)
-    setSelected(null)
-  }
-
+  // Check the current board if white/black has a Checkmate or Stalemate and Display as TEXT
   const status =
-    isCheckmate(state) ? `Checkmate — ${state.turn === 'w' ? 'Black' : 'White'} wins`
+    isCheckmate(state) ? `Checkmate! ${state.turn === 'w' ? 'Black' : 'White'} wins`
     : isStalemate(state) ? 'Stalemate'
     : `${state.turn === 'w' ? 'White' : 'Black'} to move${isCheck(state, state.turn) ? ' (check)' : ''}`
 
   return (
+    // Display Status
     <div className="flex flex-col items-center gap-4">
       <h2 className="text-lg font-semibold dark:text-white">{status}</h2>
+
+
+      {/* Chess Board itself */}
       <div
         className="grid grid-cols-8 grid-rows-8 w-[480px] h-[480px] border border-black dark:border-white"
         style={{ userSelect: 'none' }}
@@ -108,17 +82,11 @@ export default function ChessBoard() {
             const highlighted   = isSelected || isLastFrom || isLastTo
             const targetSquare  = isTarget(rank, file)
             const captureTarget = targetSquare && !!piece
-            const beingDragged  = dragging?.[0] === rank && dragging?.[1] === file
-            const canDrag       = !!piece && colorOf(piece) === state.turn
 
             return (
               <button
                 key={`${rank}-${file}`}
                 onClick={() => onClick(rank, file)}
-                onDragStart={(e) => onDragStart(e, rank, file)}
-                onDragOver={(e) => onDragOver(e, rank, file)}
-                onDrop={(e) => onDrop(e, rank, file)}
-                onDragEnd={onDragEnd}
                 style={{ position: 'relative' }}
                 className={[
                   'flex items-center justify-center focus:outline-none',
@@ -140,12 +108,9 @@ export default function ChessBoard() {
                   <img
                     src={PIECE_SRC[piece]}
                     alt={piece}
-                    draggable={canDrag}
                     style={{
                       position: 'relative',  // stack above yellow overlay
                       width: '85%', height: '85%',
-                      opacity: beingDragged ? 0.35 : 1,
-                      cursor: canDrag ? 'grab' : 'default',
                     }}
                   />
                 )}
